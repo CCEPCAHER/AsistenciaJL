@@ -1,20 +1,23 @@
-{
-  "name": "Control de Asistencias",
-  "short_name": "Asistencias",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#2980b9",
-  "icons": [
-    {
-      "src": "icons/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
-}
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open("app-cache").then((cache) => {
+      return cache.addAll([
+        "/",
+        "/index.html",
+        "/style.css",
+        "/script.js",
+        "/manifest.json",
+        "/icons/icon-192x192.png",
+        "/icons/icon-512x512.png"
+      ]);
+    })
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      return response || fetch(event.request);
+    })
+  );
+});
