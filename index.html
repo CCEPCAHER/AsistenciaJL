@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Control de Asistencias</title>
+  <!-- Fuente moderna -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json"> <!-- ✅ Se movió aquí -->
+  <!-- Librerías para generar PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+</head>
+<link rel="manifest" href="manifest.json">
+<body>
+  <div class="container">
+    <header>
+      <h1>📋 Control de Asistencias</h1>
+      <div id="currentDate"></div>
+    </header>
+    
+    <div class="controls">
+      <!-- Selector estilizado para el tipo de reunión -->
+      <select id="meetingDay">
+        <option value="entresemana">Reunión Entresemana</option>
+        <option value="finDeSemana">Reunión Fin de Semana</option>
+      </select>
+      <!-- Nuevo input para indicar la fecha de la reunión -->
+      <input type="date" id="meetingDate">
+    </div>
+
+    <div id="attendanceList" class="attendance-list"></div>
+    
+    <div class="history">
+      <h3>Últimos registros:</h3>
+      <div id="historyList"></div>
+    </div>
+  </div>
+
+  <!-- Botón fijo para descargar el reporte PDF -->
+  <button id="generateReport" onclick="generateReport()">⬇️ Descargar Reporte</button>
+
+  <script src="script.js"></script>
+</body>
+</html>
