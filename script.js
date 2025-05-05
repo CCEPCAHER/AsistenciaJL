@@ -76,22 +76,32 @@ document.addEventListener("DOMContentLoaded", () => {
   let fixedAssignments = {};
   let availability = {};
 
+  // --- DOM Element References ---
+  const allowMultipleCheckbox = document.getElementById("allowMultipleCheckbox");
+  const turnos15Checkbox = document.getElementById("turnos15Checkbox");
+  const availWeekSelect = document.getElementById("availWeekSelect");
+  const availTurnSelect = document.getElementById("availTurnSelect");
+  const roleSelect = document.getElementById("roleSelect");
+  const personSelect = document.getElementById("personSelect");
+  const availabilityListDiv = document.getElementById("availabilityList");
+  const scheduleTableContainer = document.getElementById("scheduleTableContainer");
+
+
   // Función para obtener la clave de disponibilidad según semana y turno
   const getAvailabilityKey = () => {
-    const week = document.getElementById("availWeekSelect").value;
-    const turno = document.getElementById("availTurnSelect").value;
+    const week = availWeekSelect.value;
+    const turno = availTurnSelect.value;
     return `${week}-${turno}`;
   };
 
   // Función para llenar el dropdown de personas según el rol seleccionado.
   const populatePersonSelect = () => {
-    const role = document.getElementById("roleSelect").value;
-    const personSelect = document.getElementById("personSelect");
-    personSelect.innerHTML = "";
+    const role = roleSelect.value;
+    personSelect.innerHTML = ""; // Clear previous options
 
     const filtered = role === "capitan"
       ? persons.filter(p => p.isCaptain)
-      : persons;
+      : persons; // All persons if not captain
 
     filtered.forEach(p => {
       const option = document.createElement("option");
@@ -100,77 +110,139 @@ document.addEventListener("DOMContentLoaded", () => {
       personSelect.appendChild(option);
     });
   };
-  document.getElementById("roleSelect").addEventListener("change", populatePersonSelect);
-  populatePersonSelect();
+  roleSelect.addEventListener("change", populatePersonSelect);
+  populatePersonSelect(); // Initial population
 
   // Función para guardar los datos en LocalStorage.
+  // --- MODIFICADA ---
   const saveToLocalStorage = () => {
     try {
+      // Guardar asignaciones y disponibilidad
       localStorage.setItem("fixedAssignments", JSON.stringify(fixedAssignments));
       localStorage.setItem("availability", JSON.stringify(availability));
+
+      // Guardar estado de los checkboxes
+      const settings = {
+        allowMultiple: allowMultipleCheckbox.checked,
+        turnos15: turnos15Checkbox.checked
+      };
+      localStorage.setItem("scheduleSettings", JSON.stringify(settings));
+
       alert("Datos guardados localmente.");
     } catch (error) {
       alert("Error al guardar los datos en LocalStorage.");
-      console.error(error);
+      console.error("Error saving to LocalStorage:", error);
     }
   };
 
   // Función para cargar los datos desde LocalStorage.
+  // --- MODIFICADA ---
   const loadFromLocalStorage = () => {
     try {
+      // Cargar asignaciones y disponibilidad
       const loadedAssignments = localStorage.getItem("fixedAssignments");
       const loadedAvailability = localStorage.getItem("availability");
-      if (loadedAssignments) fixedAssignments = JSON.parse(loadedAssignments);
-      if (loadedAvailability) availability = JSON.parse(loadedAvailability);
+      if (loadedAssignments) {
+          fixedAssignments = JSON.parse(loadedAssignments);
+      } else {
+          fixedAssignments = {}; // Reset if nothing loaded
+      }
+      if (loadedAvailability) {
+          availability = JSON.parse(loadedAvailability);
+      } else {
+          availability = {}; // Reset if nothing loaded
+      }
+
+      // Cargar y restaurar estado de los checkboxes
+      const loadedSettings = localStorage.getItem("scheduleSettings");
+      if (loadedSettings) {
+        const settings = JSON.parse(loadedSettings);
+        // Asignar valores cargados (usando || false como fallback)
+        allowMultipleCheckbox.checked = settings.allowMultiple || false;
+        turnos15Checkbox.checked = settings.turnos15 || false;
+      } else {
+        // Si no hay configuraciones guardadas, asegurar que estén desmarcados
+        allowMultipleCheckbox.checked = false;
+        turnos15Checkbox.checked = false;
+      }
+
       alert("Datos cargados desde LocalStorage.");
-      populateAvailabilityList();
+      populateAvailabilityList(); // Actualizar la lista de disponibilidad basada en los datos cargados
+      // Podrías querer limpiar el calendario existente si se carga nueva data
+      scheduleTableContainer.innerHTML = "";
+      const analysisContainer = document.getElementById("assignmentAnalysis");
+      if (analysisContainer) analysisContainer.innerHTML = "";
+
+
     } catch (error) {
       alert("Error al cargar los datos desde LocalStorage.");
-      console.error(error);
+      console.error("Error loading from LocalStorage:", error);
+      // Resetear estados en caso de error
+      fixedAssignments = {};
+      availability = {};
+      allowMultipleCheckbox.checked = false;
+      turnos15Checkbox.checked = false;
+      // Actualizar UI para reflejar el estado vacío
+      populateAvailabilityList();
+      scheduleTableContainer.innerHTML = "";
+      const analysisContainer = document.getElementById("assignmentAnalysis");
+      if (analysisContainer) analysisContainer.innerHTML = "";
     }
   };
 
   // Función para llenar la lista de disponibilidad con un checkbox por cada persona.
   const populateAvailabilityList = () => {
-    const availListDiv = document.getElementById("availabilityList");
-    availListDiv.innerHTML = "";
+    availabilityListDiv.innerHTML = ""; // Clear previous list
     const key = getAvailabilityKey();
-    // Si no hay datos guardados, por defecto todas están disponibles.
-    const savedAvailability = (availability[key] && availability[key].length > 0)
-      ? availability[key]
-      : persons.map(p => p.name);
+
+    // Determinar quiénes están disponibles para esta clave: los guardados o todos por defecto
+    const availableForKey = availability[key] || persons.map(p => p.name); // Default to all if no data for this key
 
     persons.forEach(p => {
       const container = document.createElement("div");
-      container.classList.add("checkbox-container");
+      container.classList.add("checkbox-container"); // Add class for styling if needed
+
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
       checkbox.value = p.name;
-      checkbox.id = `avail_${p.name.replace(/\s+/g, '_')}`;
-      checkbox.checked = savedAvailability.includes(p.name);
+      // Generate a unique ID for the checkbox and link it with the label
+      const safeId = p.name.replace(/[^a-zA-Z0-9_]/g, '_'); // Make ID safe
+      checkbox.id = `avail_${key}_${safeId}`;
+      // Check if the person is in the list of available people for this key
+      checkbox.checked = availableForKey.includes(p.name);
 
       const label = document.createElement("label");
-      label.htmlFor = checkbox.id;
+      label.htmlFor = checkbox.id; // Link label to checkbox
       label.textContent = p.name;
 
       container.appendChild(checkbox);
       container.appendChild(label);
-      availListDiv.appendChild(container);
+      availabilityListDiv.appendChild(container);
     });
   };
 
-  document.getElementById("availWeekSelect").addEventListener("change", populateAvailabilityList);
-  document.getElementById("availTurnSelect").addEventListener("change", populateAvailabilityList);
+  // Update availability list when week or turn changes
+  availWeekSelect.addEventListener("change", populateAvailabilityList);
+  availTurnSelect.addEventListener("change", populateAvailabilityList);
+  // Initial population of availability list for the default selected week/turn
   populateAvailabilityList();
 
   // Guarda la disponibilidad para la semana y turno seleccionados.
   document.getElementById("btnSaveAvailability").addEventListener("click", () => {
     const key = getAvailabilityKey();
-    const checkboxes = document.querySelectorAll("#availabilityList input[type='checkbox']");
+    const checkboxes = availabilityListDiv.querySelectorAll("input[type='checkbox']");
     const availablePersons = Array.from(checkboxes)
       .filter(chk => chk.checked)
       .map(chk => chk.value);
-    availability[key] = availablePersons;
+
+    if (availablePersons.length > 0) {
+      availability[key] = availablePersons; // Store the list of available names
+    } else {
+      // If no one is checked, maybe remove the key or store an empty array
+      // Storing empty array signifies explicitly unavailable
+      availability[key] = [];
+      // delete availability[key]; // Alternative: remove the key if no one is available
+    }
     alert(`Disponibilidad guardada para ${key}`);
   });
 
@@ -178,328 +250,415 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btnFixAssignment").addEventListener("click", () => {
     const week = document.getElementById("weekSelect").value;
     const turno = document.getElementById("turnSelect").value;
-    const role = document.getElementById("roleSelect").value;
-    const person = document.getElementById("personSelect").value;
+    const role = roleSelect.value; // Use the main role select here
+    const person = personSelect.value; // Use the main person select
     const key = `${week}-${turno}`;
 
+    // Ensure the structure exists
     if (!fixedAssignments[key]) {
       fixedAssignments[key] = { capitan: null, publicadores: [null, null, null] };
     }
+
+    // Assign based on role
     if (role === "capitan") {
       fixedAssignments[key].capitan = person;
     } else if (role.startsWith("publicador")) {
-      const index = parseInt(role.slice(-1)) - 1;
-      fixedAssignments[key].publicadores[index] = person;
+      const index = parseInt(role.slice(-1)) - 1; // Get index 0, 1, or 2
+      if (index >= 0 && index < 3) {
+        fixedAssignments[key].publicadores[index] = person;
+      }
     }
-    alert(`Turno fijado para ${key} en rol ${role}: ${person}`);
+    alert(`Turno fijado para ${key} en rol ${roleSelect.options[roleSelect.selectedIndex].text}: ${person}`);
   });
 
   // Función de selección ponderada: mayor probabilidad a quien tenga menos turnos.
   function weightedRandomCandidate(candidates, counts) {
-    let totalWeight = 0;
-    const weights = candidates.map(candidate => {
-      // Se suma 1 al conteo para evitar división por cero
-      const weight = 1 / (counts[candidate] + 1);
-      totalWeight += weight;
-      return weight;
+    if (!candidates || candidates.length === 0) return null; // Handle empty candidates
+
+    let weightedCandidates = candidates.map(candidate => {
+        // Ensure candidate exists in counts, default to 0 if not
+        const count = counts[candidate] || 0;
+        // Weight is higher for lower counts. Adding 1 avoids division by zero.
+        const weight = 1 / (count + 1);
+        return { name: candidate, weight: weight };
     });
-    let random = Math.random() * totalWeight;
-    for (let i = 0; i < candidates.length; i++) {
-      random -= weights[i];
-      if (random <= 0) return candidates[i];
+
+    const totalWeight = weightedCandidates.reduce((sum, c) => sum + c.weight, 0);
+    if (totalWeight === 0) {
+         // If all weights are 0 (e.g., if counts were Infinity?), pick random
+        return candidates[Math.floor(Math.random() * candidates.length)];
     }
+
+    let random = Math.random() * totalWeight;
+    for (let i = 0; i < weightedCandidates.length; i++) {
+      random -= weightedCandidates[i].weight;
+      if (random <= 0) return weightedCandidates[i].name;
+    }
+    // Fallback (should rarely be needed if logic is sound)
     return candidates[candidates.length - 1];
   }
+
 
   // Genera el calendario aplicando asignaciones fijas, disponibilidad, restricciones
   // y utilizando la selección ponderada para una distribución equitativa.
   document.getElementById("btnGenerateSchedule").addEventListener("click", generateSchedule);
 
   function generateSchedule() {
-    const allowMultiple = document.getElementById("allowMultipleCheckbox").checked;
-    const turnos15 = document.getElementById("turnos15Checkbox").checked;
+    const allowMultiple = allowMultipleCheckbox.checked;
+    const turnos15 = turnos15Checkbox.checked;
 
-    // Inicializa un contador local para cada persona.
-    let localCounts = {};
+    let assignedCounts = {}; // Counts within this generation run
     persons.forEach(p => {
-      localCounts[p.name] = 0;
+      assignedCounts[p.name] = 0;
     });
 
-    const weeks = turnos15 ? ["S1", "S2"] : ["S1", "S2", "S3", "S4"];
+    const weeksToProcess = turnos15 ? ["S1", "S2"] : ["S1", "S2", "S3", "S4"];
     const turnos = ["MM", "MT1", "MT2", "XT1", "XT2", "J", "VT1", "VT2", "S", "D"];
-    let scheduleResults = [];
+    let generatedSchedule = [];
+    let weeklyAssignments = {}; // Track assignments per week { S1: { person: true, ...}, S2: ... }
 
-    weeks.forEach(week => {
-      let assigned = {};
+    weeksToProcess.forEach(week => {
+      weeklyAssignments[week] = {}; // Initialize tracker for the week
+
       turnos.forEach(turno => {
         const key = `${week}-${turno}`;
-        let shiftAssignment = { week, turno, capitan: null, publicadores: [null, null, null] };
+        let shiftAssignment = {
+          week: week,
+          turno: turno,
+          capitan: null,
+          publicadores: [null, null, null]
+        };
 
-        // Aplicar asignaciones fijas y actualizar conteos.
+        let assignedInThisShift = {}; // Track assignments within this specific shift
+
+        // 1. Apply Fixed Assignments and update counts/trackers
         if (fixedAssignments[key]) {
-          if (fixedAssignments[key].capitan) {
-            shiftAssignment.capitan = fixedAssignments[key].capitan;
-            if (!allowMultiple) assigned[fixedAssignments[key].capitan] = true;
-            localCounts[fixedAssignments[key].capitan]++;
+          const fixed = fixedAssignments[key];
+          if (fixed.capitan) {
+            shiftAssignment.capitan = fixed.capitan;
+            assignedCounts[fixed.capitan]++;
+            assignedInThisShift[fixed.capitan] = true;
+            if (!allowMultiple) weeklyAssignments[week][fixed.capitan] = true;
           }
-          fixedAssignments[key].publicadores.forEach((p, i) => {
+          fixed.publicadores.forEach((p, i) => {
             if (p) {
               shiftAssignment.publicadores[i] = p;
-              if (!allowMultiple) assigned[p] = true;
-              localCounts[p]++;
+              assignedCounts[p]++;
+              assignedInThisShift[p] = true;
+              if (!allowMultiple) weeklyAssignments[week][p] = true;
             }
           });
         }
 
-        // Lista de disponibles para el turno.
-        let availableForShift = availability[key] ? [...availability[key]] : persons.map(p => p.name);
+        // 2. Determine Available Candidates for this shift
+        // Start with globally available for the turn, or all persons if none specified
+        let potentialCandidates = availability[key] ? [...availability[key]] : persons.map(p => p.name);
 
-        const filterCandidates = (candidates, condition) => {
-          return candidates.filter(name => {
-            if (!allowMultiple && assigned[name]) return false;
-            const personObj = persons.find(p => p.name === name);
-            return personObj && condition(personObj);
-          });
+        // Filter out people already assigned IF multiple turns aren't allowed for the week
+        const filterUnavailable = (name) => {
+            // Already assigned in *this specific shift*? -> No
+            if (assignedInThisShift[name]) return false;
+            // Multiple turns per week not allowed AND already assigned this week? -> No
+            if (!allowMultiple && weeklyAssignments[week][name]) return false;
+            return true; // Otherwise, they are potentially available
         };
 
-        // Asignar capitán (si no está fijado) usando selección ponderada.
+        potentialCandidates = potentialCandidates.filter(filterUnavailable);
+
+        // 3. Assign Captain (if not fixed)
         if (!shiftAssignment.capitan) {
-          const candidates = filterCandidates(availableForShift, person => person.isCaptain);
-          if (candidates.length > 0) {
-            const chosen = weightedRandomCandidate(candidates, localCounts);
-            shiftAssignment.capitan = chosen;
-            if (!allowMultiple) assigned[chosen] = true;
-            localCounts[chosen]++;
+          const captainCandidates = potentialCandidates.filter(name => {
+              const personObj = persons.find(p => p.name === name);
+              return personObj && personObj.isCaptain;
+          });
+
+          const chosenCaptain = weightedRandomCandidate(captainCandidates, assignedCounts);
+          if (chosenCaptain) {
+            shiftAssignment.capitan = chosenCaptain;
+            assignedCounts[chosenCaptain]++;
+            assignedInThisShift[chosenCaptain] = true;
+            if (!allowMultiple) weeklyAssignments[week][chosenCaptain] = true;
+            // Remove chosen captain from potential publisher list for this shift
+            potentialCandidates = potentialCandidates.filter(name => name !== chosenCaptain);
           } else {
-            shiftAssignment.capitan = "Sin asignar";
+            shiftAssignment.capitan = "Vacante"; // Or "Sin capitán disponible"
           }
         }
 
-        // Asignar los 3 publicadores usando selección ponderada.
+        // 4. Assign Publishers (for empty slots)
         for (let i = 0; i < 3; i++) {
           if (!shiftAssignment.publicadores[i]) {
-            const candidates = filterCandidates(availableForShift, person => true);
-            if (candidates.length > 0) {
-              const chosen = weightedRandomCandidate(candidates, localCounts);
-              shiftAssignment.publicadores[i] = chosen;
-              if (!allowMultiple) assigned[chosen] = true;
-              localCounts[chosen]++;
+            // Re-filter potential candidates based on current assignments *in this shift*
+             const availablePublishers = potentialCandidates.filter(name => !assignedInThisShift[name] && (!(!allowMultiple && weeklyAssignments[week][name])));
+
+            const chosenPublisher = weightedRandomCandidate(availablePublishers, assignedCounts);
+            if (chosenPublisher) {
+              shiftAssignment.publicadores[i] = chosenPublisher;
+              assignedCounts[chosenPublisher]++;
+              assignedInThisShift[chosenPublisher] = true;
+              if (!allowMultiple) weeklyAssignments[week][chosenPublisher] = true;
+               // Remove chosen publisher from potential list for the *next* slot in this shift
+              potentialCandidates = potentialCandidates.filter(name => name !== chosenPublisher);
             } else {
-              shiftAssignment.publicadores[i] = "Sin asignar";
+              shiftAssignment.publicadores[i] = "Vacante"; // Or "Sin publicador disponible"
             }
           }
         }
+        generatedSchedule.push(shiftAssignment);
+      }); // End turnos loop
+    }); // End weeksToProcess loop
 
-        scheduleResults.push(shiftAssignment);
-      });
-    });
-
-    // Duplicar asignaciones para "Turnos cada 15 días" si está activado.
+    // 5. Duplicate for S3/S4 if turnos15 is checked
     if (turnos15) {
-      const duplicates = scheduleResults.map(shift => {
-        let newWeek = shift.week === "S1" ? "S3" : shift.week === "S2" ? "S4" : shift.week;
-        return {
-          week: newWeek,
-          turno: shift.turno,
-          capitan: shift.capitan,
-          publicadores: [...shift.publicadores]
-        };
+      const secondHalf = generatedSchedule.map(shift => {
+          // Creates a new object, preserving original generatedSchedule
+          return {
+              ...shift, // Copy existing properties
+              week: shift.week === "S1" ? "S3" : "S4" // Change the week
+          };
       });
-      scheduleResults = scheduleResults.concat(duplicates);
+      generatedSchedule = generatedSchedule.concat(secondHalf);
     }
 
-    displaySchedule(scheduleResults);
+    // 6. Display the final schedule
+    displaySchedule(generatedSchedule);
   }
 
-  // Mapeo para los días/turnos
+
+  // Mapeo para los días/turnos con colores (Ejemplo, ajusta según tu style.css)
   const turnoMapping = {
-    "MM": "day-lunes",
-    "MT1": "day-martes-1",
-    "MT2": "day-martes-2",
-    "XT1": "day-miercoles-1",
-    "XT2": "day-miercoles-2",
-    "J": "day-jueves",
-    "VT1": "day-viernes-1",
-    "VT2": "day-viernes-2",
-    "S": "day-sabado",
-    "D": "day-domingo"
+    "MM": "day-lunes",       // Lunes
+    "MT1": "day-martes-1",   // Martes Mañana
+    "MT2": "day-martes-2",   // Martes Tarde
+    "XT1": "day-miercoles-1",// Miércoles Mañana
+    "XT2": "day-miercoles-2",// Miércoles Tarde
+    "J": "day-jueves",       // Jueves
+    "VT1": "day-viernes-1",  // Viernes Mañana
+    "VT2": "day-viernes-2",  // Viernes Tarde
+    "S": "day-sabado",       // Sábado
+    "D": "day-domingo"       // Domingo
   };
 
-  // Mapeo para las semanas
+  // Mapeo para las semanas con colores (Ejemplo)
   const weekMapping = {
-    "S1": "week-S1",
-    "S2": "week-S2",
-    "S3": "week-S3",
-    "S4": "week-S4"
+    "S1": "week-s1",
+    "S2": "week-s2",
+    "S3": "week-s3",
+    "S4": "week-s4"
   };
 
-  function displaySchedule(scheduleResults) {
-    const container = document.getElementById("scheduleTableContainer");
-    container.innerHTML = "";
+  function displaySchedule(scheduleData) {
+    scheduleTableContainer.innerHTML = ""; // Clear previous table
+
+    if (!scheduleData || scheduleData.length === 0) {
+        scheduleTableContainer.textContent = "No hay datos de calendario para mostrar.";
+        return;
+    }
 
     const table = document.createElement("table");
-    table.className = "schedule-table";
+    table.className = "schedule-table"; // For CSS styling
 
-    // Cabecera de la tabla
-    const thead = document.createElement("thead");
-    const headerRow = document.createElement("tr");
+    // Create Table Header
+    const thead = table.createTHead();
+    const headerRow = thead.insertRow();
     ["Semana", "Turno", "Capitán", "Publicador 1", "Publicador 2", "Publicador 3"].forEach(text => {
       const th = document.createElement("th");
       th.textContent = text;
       headerRow.appendChild(th);
     });
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
 
-    // Cuerpo de la tabla
-    const tbody = document.createElement("tbody");
+    // Create Table Body
+    const tbody = table.createTBody();
+    scheduleData.forEach(item => {
+      const row = tbody.insertRow();
 
-    scheduleResults.forEach(item => {
-      const row = document.createElement("tr");
-
-      // Celda para la semana con su color independiente
-      const tdWeek = document.createElement("td");
-      tdWeek.textContent = item.week;
-      const weekClass = weekMapping[item.week];
-      if (weekClass) {
-        tdWeek.classList.add(weekClass);
+      // Week Cell (with potential week-specific class)
+      const cellWeek = row.insertCell();
+      cellWeek.textContent = item.week;
+      if (weekMapping[item.week]) {
+        cellWeek.classList.add(weekMapping[item.week]);
       }
-      row.appendChild(tdWeek);
 
-      // Obtener la clase para el día/turno
-      const dayClass = turnoMapping[item.turno] || "";
-
-      // Celda para el turno con su color
-      const tdTurno = document.createElement("td");
-      tdTurno.textContent = item.turno;
+      // Turno Cell (with potential day/turno specific class)
+      const cellTurno = row.insertCell();
+      cellTurno.textContent = item.turno;
+      const dayClass = turnoMapping[item.turno];
       if (dayClass) {
-        tdTurno.classList.add(dayClass);
+        cellTurno.classList.add(dayClass);
       }
-      row.appendChild(tdTurno);
 
-      // Celda para el capitán, aplicando el mismo color del día
-      const tdCap = document.createElement("td");
-      tdCap.textContent = item.capitan;
-      if (dayClass) {
-        tdCap.classList.add(dayClass);
-      }
-      row.appendChild(tdCap);
+      // Captain Cell (apply day class)
+      const cellCap = row.insertCell();
+      cellCap.textContent = item.capitan || "Vacante"; // Show Vacante if null/undefined
+       if (dayClass) {
+         cellCap.classList.add(dayClass);
+       }
 
-      // Celdas para los publicadores, aplicando el mismo color del día
+
+      // Publisher Cells (apply day class)
       item.publicadores.forEach(pub => {
-        const tdPub = document.createElement("td");
-        tdPub.textContent = pub;
-        if (dayClass) {
-          tdPub.classList.add(dayClass);
-        }
-        row.appendChild(tdPub);
+        const cellPub = row.insertCell();
+        cellPub.textContent = pub || "Vacante"; // Show Vacante if null/undefined
+         if (dayClass) {
+           cellPub.classList.add(dayClass);
+         }
       });
-
-      tbody.appendChild(row);
     });
 
-    table.appendChild(tbody);
-    container.appendChild(table);
+    scheduleTableContainer.appendChild(table);
 
-    // Llama a la función para analizar las asignaciones, si la tienes
-    analyzeAssignments(scheduleResults);
+    // Analyze assignments and display summary
+    analyzeAssignments(scheduleData);
 
-    // --- Aquí añadimos la opción de exportar PDF ---
-    // Evitamos crear múltiples botones si se vuelve a generar
+    // Add PDF Export Button (if not already present)
     if (!document.getElementById("btnExportPDF")) {
       const exportBtn = document.createElement("button");
       exportBtn.id = "btnExportPDF";
       exportBtn.textContent = "Exportar PDF";
-      exportBtn.style.margin = "10px 0";
-      container.parentNode.insertBefore(exportBtn, container.nextSibling);
+      exportBtn.style.marginTop = "15px"; // Add some space
+      exportBtn.style.padding = "8px 15px";
+       // Insert after the table container but within the same section
+      scheduleTableContainer.parentNode.insertBefore(exportBtn, scheduleTableContainer.nextSibling);
 
       exportBtn.addEventListener("click", () => {
+        // Check if jsPDF is loaded
+        if (typeof window.jspdf === 'undefined' || typeof window.jspdf.jsPDF === 'undefined') {
+            alert("Error: La librería jsPDF no está cargada. Asegúrate de incluirla en tu HTML.");
+            console.error("jsPDF or jsPDF.jsPDF is undefined.");
+            return;
+        }
+         // Check if autoTable plugin is loaded
+         if (typeof window.jspdf.jsPDF.autoTable !== 'function') {
+             alert("Error: El plugin jsPDF-AutoTable no está cargado correctamente.");
+             console.error("jsPDF.autoTable is not a function.");
+             return;
+         }
+
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({
-          unit: "pt",
-          format: "a4",
-          orientation: "portrait"
+          orientation: "portrait", // portrait layout
+          unit: "pt",             // points as units
+          format: "a4"            // A4 paper size
         });
 
-        // Título
         doc.setFontSize(18);
-        doc.text("Calendario de Turnos", 40, 50);
+        doc.text("Calendario de Turnos", 40, 50); // Title and position
 
-        // Generar la tabla a partir del HTML
+        // Generate table using autoTable plugin
         doc.autoTable({
-          html: ".schedule-table",
-          startY: 80,
-          theme: "grid",
+          html: ".schedule-table", // Use the table's class
+          startY: 70, // Position below the title
+          theme: 'grid', // 'striped', 'grid', 'plain'
           headStyles: {
-            fillColor: [63, 81, 181],
-            textColor: 255,
-            halign: "center"
+            fillColor: [22, 160, 133], // Example header color (teal)
+            textColor: [255, 255, 255], // White text
+            halign: 'center'
           },
           styles: {
             fontSize: 9,
-            cellPadding: 4
+            cellPadding: 5,
           },
-          didParseCell: function(data) {
-            const node = data.cell.raw;
-            // Colores de fondo según clases
-            Object.entries(turnoMapping).forEach(([turn, cls]) => {
-              if (node.classList && node.classList.contains(cls)) {
-                const bg = getComputedStyle(document.querySelector(`.${cls}`)).backgroundColor;
-                const nums = bg.match(/\d+/g).map(Number);
-                data.cell.styles.fillColor = nums;
-              }
-            });
-            Object.entries(weekMapping).forEach(([wk, cls]) => {
-              if (node.classList && node.classList.contains(cls)) {
-                const bg = getComputedStyle(document.querySelector(`.${cls}`)).backgroundColor;
-                const nums = bg.match(/\d+/g).map(Number);
-                data.cell.styles.fillColor = nums;
-              }
-            });
-          }
+          columnStyles: { // Example: Center align 'Semana' and 'Turno'
+            0: { halign: 'center' }, // Semana
+            1: { halign: 'center' }  // Turno
+          },
+          didParseCell: function (data) {
+            // Apply background colors based on CSS classes if style.css is loaded
+            const cellElement = data.cell.raw; // The HTML TD/TH element
+            if (cellElement && cellElement.classList) {
+                try {
+                    let fillColor = null;
+                     // Check week classes first
+                     Object.entries(weekMapping).forEach(([key, cls]) => {
+                         if (cellElement.classList.contains(cls)) {
+                             const style = getComputedStyle(cellElement);
+                             fillColor = style.backgroundColor; // Get computed background color
+                         }
+                     });
+                     // Check day classes (potentially override week color if more specific)
+                     Object.entries(turnoMapping).forEach(([key, cls]) => {
+                         if (cellElement.classList.contains(cls)) {
+                             const style = getComputedStyle(cellElement);
+                             fillColor = style.backgroundColor;
+                         }
+                     });
+
+                     if (fillColor && fillColor !== 'rgba(0, 0, 0, 0)' && fillColor !== 'transparent') {
+                        // Convert 'rgb(r, g, b)' to [r, g, b] array
+                        const rgb = fillColor.match(/\d+/g);
+                        if (rgb && rgb.length >= 3) {
+                            data.cell.styles.fillColor = [parseInt(rgb[0]), parseInt(rgb[1]), parseInt(rgb[2])];
+                        }
+                     }
+                } catch (e) {
+                    console.warn("Could not apply cell style for PDF:", e);
+                }
+            }
+          },
+          // You can add more customizations here (margins, etc.)
         });
 
-        doc.save("calendario-turnos.pdf");
+        // Save the PDF
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        doc.save(`calendario-turnos-${today}.pdf`);
       });
     }
   }
 
+
   // Función para analizar asignaciones y mostrar cuántos turnos tiene cada persona.
-  function analyzeAssignments(scheduleResults) {
+  function analyzeAssignments(scheduleData) {
     let counts = {};
     persons.forEach(p => {
-      counts[p.name] = 0;
+      counts[p.name] = 0; // Initialize count for everyone
     });
 
-    scheduleResults.forEach(shift => {
-      if (shift.capitan && shift.capitan !== "Sin asignar") {
+    scheduleData.forEach(shift => {
+      // Increment count if the person is assigned and not 'Vacante' or similar
+      if (shift.capitan && persons.some(p => p.name === shift.capitan)) {
         counts[shift.capitan]++;
       }
       shift.publicadores.forEach(pub => {
-        if (pub && pub !== "Sin asignar") {
+        if (pub && persons.some(p => p.name === pub)) {
           counts[pub]++;
         }
       });
     });
 
+    // Find or create the container for the analysis results
     let analysisContainer = document.getElementById("assignmentAnalysis");
     if (!analysisContainer) {
       analysisContainer = document.createElement("div");
       analysisContainer.id = "assignmentAnalysis";
       analysisContainer.style.marginTop = "20px";
-      document.getElementById("scheduleSection").appendChild(analysisContainer);
+      // Append it within the schedule section, after the PDF button if it exists
+       const pdfButton = document.getElementById("btnExportPDF");
+       if (pdfButton) {
+           pdfButton.parentNode.insertBefore(analysisContainer, pdfButton.nextSibling);
+       } else {
+           scheduleTableContainer.parentNode.insertBefore(analysisContainer, scheduleTableContainer.nextSibling);
+       }
+
     }
-    analysisContainer.innerHTML = "";
+    analysisContainer.innerHTML = ""; // Clear previous results
 
     const heading = document.createElement("h3");
-    heading.textContent = "Resumen de Asignaciones";
+    heading.textContent = "Resumen de Asignaciones Generadas";
     analysisContainer.appendChild(heading);
 
     const list = document.createElement("ul");
-    persons.forEach(p => {
+    list.style.listStyleType = "none"; // Optional: remove bullet points
+    list.style.paddingLeft = "0";     // Optional: remove default padding
+
+    // Sort persons by name for consistent display order in the summary
+    persons.slice().sort((a, b) => a.name.localeCompare(b.name)).forEach(p => {
+      const count = counts[p.name];
       const li = document.createElement("li");
-      li.textContent = `${p.name}: ${counts[p.name]} turno(s)`;
-      li.style.color = counts[p.name] === 0 ? "red" : "green";
+      li.textContent = `${p.name}: ${count} turno(s)`;
+      // Style based on count
+      li.style.color = count === 0 ? "#e74c3c" : "#27ae60"; // Red if 0, Green otherwise
+      li.style.marginBottom = "3px"; // Add a little spacing
       list.appendChild(li);
     });
     analysisContainer.appendChild(list);
@@ -508,4 +667,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Asignar eventos a botones de almacenamiento.
   document.getElementById("btnSaveStorage").addEventListener("click", saveToLocalStorage);
   document.getElementById("btnLoadStorage").addEventListener("click", loadFromLocalStorage);
-});
+
+  // Initial setup calls after DOM is ready
+  // populatePersonSelect(); // Already called after definition
+  // populateAvailabilityList(); // Already called after definition
+
+}); // End DOMContentLoaded
